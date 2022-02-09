@@ -1250,6 +1250,12 @@ fn field_ordering_position(field: &str) -> Option<usize> {
         .map(|pos| pos + 1)
 }
 
+pub trait AvroSchema {
+    //const SCHEMA: Schema;
+    //fn get_schema() -> &'static Schema;
+    fn get_schema() -> Schema;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

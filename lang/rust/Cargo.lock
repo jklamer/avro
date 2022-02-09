@@ -80,6 +80,7 @@ dependencies = [
  "avro-rs",
  "proc-macro2",
  "quote",
+ "serde",
  "syn",
 ]
 

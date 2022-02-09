@@ -1,13 +1,9 @@
 use std::collections::HashMap;
 
-use avro_rs::{Schema, schema::{RecordField, RecordFieldOrder, Name}};
+use avro_rs::{Schema, schema::{RecordField, RecordFieldOrder, Name, AvroSchema}};
 use quote::quote;
 use proc_macro2::TokenStream;
 use syn::{parse_macro_input, DeriveInput, Error, Type};
-
-trait AvroSchema {
-    fn get_schema() -> &'static Schema;
-}
 
 #[proc_macro_derive(AvroSchema)]
 pub fn proc_macro_derive_avro_schema(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -55,9 +51,8 @@ fn derive_avro_schema(input: &mut DeriveInput) -> Result<TokenStream, Vec<syn::E
     let ty = &input.ident;
     let dummy = quote! {
         impl AvroSchema for #ty {
-            const schema : Schema = Schema::parse_str(#can_form).unwrap();
-            pub fn get_schema() -> &'static Schema {
-                &schema
+            fn get_schema() -> Schema {
+                Schema::parse_str(#can_form).unwrap()
             }
         }
     };
@@ -71,10 +66,14 @@ fn type_to_schema(ty: &Type) -> Result<Schema, Vec<Error>> {
         // println!("{:?}",ty);
 
         let schema = match &type_string[..] {
-            "i8" | "i16" | "i32" => Schema::Int,
+            "bool" => Schema::Boolean,
+            "i8" | "i16" | "i32" | "u8" | "u16" => Schema::Int,
             "i64" => Schema::Long,
-            "String" => Schema::String,
-            _ => return Err(vec![]),
+            "f32" => Schema::Float,
+            "f64" => Schema::Double,
+            "char" | "String" => Schema::String,
+            "u32" | "u64" => return Err(todo!()), //Can't guarentee serialization type 
+            _ => return Err(todo!()),
         };
         Ok(schema)
     } else {
