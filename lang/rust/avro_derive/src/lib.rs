@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use avro_rs::{Schema, schema::{RecordField, RecordFieldOrder, Name, AvroSchema}};
 use quote::quote;
 use proc_macro2::TokenStream;
-use syn::{parse_macro_input, DeriveInput, Error, Type};
+use syn::{parse_macro_input, DeriveInput, Error, Type, spanned::Spanned};
 
 #[proc_macro_derive(AvroSchema)]
 pub fn proc_macro_derive_avro_schema(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -23,34 +23,35 @@ fn derive_avro_schema(input: &mut DeriveInput) -> Result<TokenStream, Vec<syn::E
                     for (position, field) in a.named.iter().enumerate() {
                         let name = field.ident.as_ref().unwrap();
                         let ty = &field.ty;
-                        schema_fields.push(RecordField{
+                        schema_fields.push( RecordField {
                             name: name.to_string(),
                             doc: Option::None,
                             default: Option::None,
                             schema: type_to_schema(ty)?,
                             order: RecordFieldOrder::Ignore,
-                            position: position,
+                            position,
                         })
                     }
                 },
-                _ => return Err(vec![]),
+                _ => return Err(vec![ Error::new(input.ident.span(), "AvroSchema derive only works for normal structs") ]),
             }
         },
-        _ => return Err(vec![]),
+        _ => return Err(vec![ Error::new(input.ident.span(), "AvroSchema derive only works for structs") ]),
     };
 
-    let lookup: HashMap<String, usize> =  schema_fields.iter().map(|field | { field.name.to_owned() }).enumerate().map(|(num, name)| { (name, num)}).collect();
+    let lookup: HashMap<String, usize> =  schema_fields.iter().map(|field | {(field.name.to_owned(),  field.position)}).collect();
     let record_schema = Schema::Record{
         name: Name::new(&name[..]),
         doc: None,
         fields: schema_fields,
         lookup: lookup,
     };
-    println!("{}", record_schema.canonical_form());
+    // println!("{}", record_schema.canonical_form());
     let can_form = record_schema.canonical_form();
     let ty = &input.ident;
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl(); 
     let dummy = quote! {
-        impl AvroSchema for #ty {
+        impl #impl_generics AvroSchema for #ty #ty_generics #where_clause{
             fn get_schema() -> Schema {
                 Schema::parse_str(#can_form).unwrap()
             }
@@ -72,11 +73,15 @@ fn type_to_schema(ty: &Type) -> Result<Schema, Vec<Error>> {
             "f32" => Schema::Float,
             "f64" => Schema::Double,
             "char" | "String" => Schema::String,
-            "u32" | "u64" => return Err(todo!()), //Can't guarentee serialization type 
+            "u32" | "u64" => return Err(vec![Error::new_spanned(ty, "Cannot guarentee sucessful serialization of this type due to overflow concerns")]), //Can't guarentee serialization type 
             _ => return Err(todo!()),
         };
         Ok(schema)
-    } else {
+    }else if let Type::Array(ta) = ty {
+        //let inner_schema = type_to_schema(&ta.elem)?;
+        Ok(Schema::Array(Box::new(type_to_schema(&ta.elem)?)))
+    }
+    else {
         Err(vec![])
     }
 }
@@ -103,6 +108,27 @@ mod tests {
         match syn::parse2::<DeriveInput>(test_struct){
             Ok(mut input) => {
                 println!("{}", derive_avro_schema(&mut input).unwrap());
+            },
+            Err(_) => println!("error!")
+        };
+    }
+
+    #[test]
+    fn tuple_struct_unsupported() {
+        let test_tuple_struct = quote!{
+            struct B (i32, String)
+        };
+
+        match syn::parse2::<DeriveInput>(test_tuple_struct){
+            Ok(mut input) => {
+                println!("{}", derive_avro_schema(&mut input).unwrap());
+                match derive_avro_schema(&mut input) {
+                    Ok(_) => assert!(false),
+                    Err(e) => {
+                        println!("{:?}",e);
+                        assert!(!e.is_empty())
+                    },
+                }
             },
             Err(_) => println!("error!")
         };
