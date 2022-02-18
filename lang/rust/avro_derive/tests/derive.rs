@@ -15,21 +15,22 @@ extern crate avro_derive;
 #[cfg(test)]
 mod test_derive {
     use avro_rs::{Reader, from_value};
+    use serde::{Deserializer, de::DeserializeOwned};
 
     use super::*;
 
     /// Takes in a struct that implements the write combination of traits and runs the Struct through a Serde Cycle and asserts the result is the same 
-    fn freeze_dry<'a, T>(obj: T)  where T : std::fmt::Debug + Serialize + Deserialize<'a> + AvroSchema + Clone + PartialEq  {
+    fn freeze_dry<T>(obj: T) where T : std::fmt::Debug + Serialize + DeserializeOwned + AvroSchema + Clone + PartialEq  {
         let schema = T::get_schema();
         let mut writer = Writer::new(&schema, Vec::new());
         writer.append_ser(obj.clone()).unwrap();
         let encoded = writer.into_inner().unwrap();
         let reader = Reader::with_schema(&schema, &encoded[..]).unwrap();
-        for value in reader {
-            let value = value.unwrap();
+        let mut value;
+        for res in reader {
+            value = res.unwrap();
             assert_eq!(obj, from_value::<T>(&value).unwrap());
         }
-
     }
     
     #[derive(Debug, Serialize, Deserialize, AvroSchema, Clone, PartialEq)]
@@ -47,15 +48,16 @@ mod test_derive {
             a: 27,
             b: "foo".to_owned(),
         };
-        // successfully writes with the derived schema
-        writer.append_ser(test.clone()).unwrap();
-        let encoded = writer.into_inner().unwrap();
-        // successfully reads with the derived schema
-        let reader = Reader::with_schema(&schema, &encoded[..]).unwrap();
-        for value in reader {
-            //assert we get it back!
-            assert_eq!(test, from_value::<Test1>(&value.unwrap()).unwrap());
-        }
+        // // successfully writes with the derived schema
+        // writer.append_ser(test.clone()).unwrap();
+        // let encoded = writer.into_inner().unwrap();
+        // // successfully reads with the derived schema
+        // let reader = Reader::with_schema(&schema, &encoded[..]).unwrap();
+        // for value in reader {
+        //     //assert we get it back!
+        //     assert_eq!(test, from_value::<Test1>(&value.unwrap()).unwrap());
+        // }
+        freeze_dry(test);
     }
 
     #[derive(Debug, Serialize, Deserialize, AvroSchema, Clone, PartialEq)]
@@ -74,8 +76,21 @@ mod test_derive {
         k: String
     }
 
-
-
-
-    
+    #[test]
+    fn test_basic_types() {
+        let all_basic = Test2 {
+            a: true,
+            b: 8,
+            c: 16,
+            d: 32,
+            e: 8,
+            f: 16,
+            g: 64,
+            h: 32.3333,
+            i: 64.4444,
+            j: 'f',
+            k: "testing string".to_owned(),
+        };
+        freeze_dry(all_basic);
+    }
 }
