@@ -1250,10 +1250,55 @@ fn field_ordering_position(field: &str) -> Option<usize> {
         .map(|pos| pos + 1)
 }
 
+pub fn record_schema_for_fields(name: Name, doc: Documentation, fields: Vec<RecordField>) -> Schema {
+    let lookup: HashMap<String, usize> =  fields.iter().map(|field | {(field.name.to_owned(),  field.position)}).collect();
+    Schema::Record{name, doc, fields, lookup}
+}
+
 pub trait AvroSchema {
-    //const SCHEMA: Schema;
-    //fn get_schema() -> &'static Schema;
-    fn get_schema() -> Schema;
+    const SCHEMA: &'static Schema;
+    // fn get_schema() -> &'static Schema;
+}
+
+pub trait AvroSchemaOwned {
+    fn get_owned_schema() -> Schema;
+}
+
+impl <T> AvroSchemaOwned for Vec<T> where T : AvroSchemaOwned {
+    fn get_owned_schema() -> Schema {
+        Schema::Array(Box::new(T::get_owned_schema()))
+    }
+}
+
+impl <T> AvroSchemaOwned for Option<T> where T : AvroSchemaOwned {
+    fn get_owned_schema() -> Schema {
+        let inner_schema = T::get_owned_schema();
+        Schema::Union(UnionSchema {
+            schemas: vec![Schema::Null, inner_schema.clone()],
+            variant_index: vec![Schema::Null, inner_schema.clone()].iter()
+                            .enumerate()
+                            .map(|(idx, s)|  (SchemaKind::from(s), idx))
+                            .collect(),
+        })
+    }
+}
+
+impl <T> AvroSchemaOwned for T where T : AvroSchema {
+    fn get_owned_schema() -> Schema {
+        T::SCHEMA.clone()
+    }
+}
+
+impl AvroSchemaOwned for i32 {
+    fn get_owned_schema() -> Schema {
+        Schema::Int
+    }
+}
+
+impl AvroSchemaOwned for Vec<u8> {
+    fn get_owned_schema() -> Schema {
+        Schema::Bytes
+    }
 }
 
 #[cfg(test)]
