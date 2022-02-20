@@ -25,12 +25,12 @@ fn derive_avro_schema(input: &mut DeriveInput) -> Result<TokenStream, Vec<syn::E
                         let schema_expr = type_to_schema_expr(&field.ty)?;
                         let position = position;
                         record_field_exprs.push(quote!{
-                            RecordField {
-                                    name: #name,
+                            avro_rs::schema::RecordField {
+                                    name: #name.to_string(),
                                     doc: Option::None,
                                     default: Option::None,
                                     schema: #schema_expr,
-                                    order: RecordFieldOrder::Ignore,
+                                    order: avro_rs::schema::RecordFieldOrder::Ignore,
                                     position: #position,
                                 }
                         });
@@ -45,7 +45,7 @@ fn derive_avro_schema(input: &mut DeriveInput) -> Result<TokenStream, Vec<syn::E
 
     let schema_def = quote!{
         let schema_fields = vec![#(#record_field_exprs),*];
-        avro_rs::schema::record_schema_for_fields(schema_fields);
+        avro_rs::schema::record_schema_for_fields(avro_rs::schema::Name::new(#name),None, schema_fields)
     };
 
 

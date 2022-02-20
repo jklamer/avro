@@ -21,7 +21,7 @@ mod test_derive {
 
     /// Takes in a struct that implements the right combination of traits and runs the Struct through a Serde Cycle and asserts the result is the same 
     fn freeze_dry<T>(obj: T) where T : std::fmt::Debug + Serialize + DeserializeOwned + AvroSchema + Clone + PartialEq  {
-        let schema = T::get_schema();
+        let schema = T::SCHEMA;
         let mut writer = Writer::new(&schema, Vec::new());
         writer.append_ser(obj.clone()).unwrap();
         let encoded = writer.into_inner().unwrap();
