@@ -1256,23 +1256,41 @@ pub fn record_schema_for_fields(name: Name, doc: Documentation, fields: Vec<Reco
 }
 
 pub trait AvroSchema {
-    const SCHEMA: &'static Schema;
-    // fn get_schema() -> &'static Schema;
+    fn get_schema() -> Schema;
 }
 
-pub trait AvroSchemaOwned {
-    fn get_owned_schema() -> Schema;
-}
+macro_rules! impl_schema(
+    ($type:ty, $variant_constructor:expr) => (
+        impl AvroSchema for $type {
+            fn get_schema() -> Schema {
+                $variant_constructor
+            }
+        }
+    );
+);
 
-impl <T> AvroSchemaOwned for Vec<T> where T : AvroSchemaOwned {
-    fn get_owned_schema() -> Schema {
-        Schema::Array(Box::new(T::get_owned_schema()))
+impl_schema!(i8, Schema::Int);
+impl_schema!(i16, Schema::Int);
+impl_schema!(i32, Schema::Int);
+impl_schema!(u8, Schema::Int);
+impl_schema!(u16, Schema::Int);
+impl_schema!(f32, Schema::Float);
+impl_schema!(f64, Schema::Double);
+impl_schema!(char, Schema::String);
+impl_schema!(String, Schema::String);
+impl_schema!(u32, Schema::Long); // ?!?!?!?!?!?!!?!?!?!?!?
+impl_schema!(u64, Schema::Long); // ?!?!?!?!?!?!?!?!?
+
+
+impl <T> AvroSchema for Vec<T> where T : AvroSchema {
+    fn get_schema() -> Schema {
+        Schema::Array(Box::new(T::get_schema()))
     }
 }
 
-impl <T> AvroSchemaOwned for Option<T> where T : AvroSchemaOwned {
-    fn get_owned_schema() -> Schema {
-        let inner_schema = T::get_owned_schema();
+impl <T> AvroSchema for Option<T> where T : AvroSchema {
+    fn get_schema() -> Schema {
+        let inner_schema = T::get_schema();
         Schema::Union(UnionSchema {
             schemas: vec![Schema::Null, inner_schema.clone()],
             variant_index: vec![Schema::Null, inner_schema.clone()].iter()
@@ -1283,23 +1301,12 @@ impl <T> AvroSchemaOwned for Option<T> where T : AvroSchemaOwned {
     }
 }
 
-impl <T> AvroSchemaOwned for T where T : AvroSchema {
-    fn get_owned_schema() -> Schema {
-        T::SCHEMA.clone()
-    }
-}
-
-impl AvroSchemaOwned for i32 {
-    fn get_owned_schema() -> Schema {
-        Schema::Int
-    }
-}
-
-impl AvroSchemaOwned for Vec<u8> {
-    fn get_owned_schema() -> Schema {
-        Schema::Bytes
-    }
-}
+/// Need to determin best course of action here
+// impl AvroSchema for Vec<u8> {
+//     fn get_schema() -> Schema {
+//         Schema::Bytes
+//     }
+// }
 
 #[cfg(test)]
 mod tests {

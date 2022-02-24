@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
-use avro_rs::{Schema, schema::{RecordField, RecordFieldOrder, Name, AvroSchema}};
 use quote::quote;
 use proc_macro2::TokenStream;
-use syn::{parse_macro_input, DeriveInput, Error, Type, spanned::Spanned};
+
+use syn::{parse_macro_input, DeriveInput, Error, Type, spanned::Spanned, TypePath, PathArguments};
 
 #[proc_macro_derive(AvroSchema)]
 pub fn proc_macro_derive_avro_schema(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -62,7 +62,9 @@ fn derive_avro_schema(input: &mut DeriveInput) -> Result<TokenStream, Vec<syn::E
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl(); 
     let dummy = quote! {
         impl #impl_generics AvroSchema for #ty #ty_generics #where_clause {
-            const SCHEMA : &'static Schema = &{#schema_def};
+            fn get_schema() -> Schema {
+                #schema_def
+            }
         }
     };
     Ok(dummy)
@@ -83,15 +85,37 @@ fn type_to_schema_expr(ty: &Type) -> Result<TokenStream, Vec<Error>> {
             "String" => quote!{Schema::String},
             "char" => return Err(vec![Error::new_spanned(ty, "AvroSchema: Cannot guarentee sucessful deserialization of this type")]),
             "u32" | "u64" => return Err(vec![Error::new_spanned(ty, "Cannot guarentee sucessful serialization of this type due to overflow concerns")]), //Can't guarentee serialization type 
-            _ => return Ok(quote!{ #p::get_owned_schema()}),
+            _ => {
+                println!("typepath {:?}", p);
+                return type_path_get_schema(p)
+            },
         };
         Ok(schema)
-    }else if let Type::Array(ta) = ty {
+    } else if let Type::Array(ta) = ty {
         let inner_schema_expr = type_to_schema_expr(&ta.elem)?;
         Ok(quote!{Schema::Array(Box::new(#inner_schema_expr))})
     }
     else {
         Err(vec![])
+    }
+}
+
+fn type_path_get_schema(p: &TypePath) -> Result<TokenStream, Vec<Error>> {
+    let last = p.path.segments.last().unwrap(); // inside a stuct there type must always be defined / have a last path segment
+    let mut it = p.path.segments.iter().peekable();
+    let mut all_but_last =  vec![];
+    while let Some(path_seg) = it.next() {
+        if let Some(_) = it.peek() {
+            //not the last
+            all_but_last.push(path_seg.clone());
+        }
+    }
+
+    let ident = last.ident.clone(); 
+    match last.arguments.clone() {
+        PathArguments::None => Ok(quote!{#(#all_but_last::)*#ident::get_schema()}),
+        PathArguments::AngleBracketed(a ) => Ok(quote!{#(#all_but_last::)*#ident::#a::get_schema()}),
+        PathArguments::Parenthesized(_) => unreachable!(),
     }
 }
 
@@ -146,6 +170,22 @@ mod tests {
         match syn::parse2::<DeriveInput>(test_tuple_struct){
             Ok(mut input) => {
                 assert!(derive_avro_schema(&mut input).is_err())
+            },
+            Err(_) => assert!(false)
+        };
+    }
+
+    #[test]
+    fn optional_type_generating() {
+        let stuct_with_optional = quote!{
+            struct Test4 {
+                a : Option<i32>
+            }
+        };
+        match syn::parse2::<DeriveInput>(stuct_with_optional){
+            Ok(mut input) => {
+                println!("{}", derive_avro_schema(&mut input).unwrap());
+                assert!(derive_avro_schema(&mut input).is_ok())
             },
             Err(_) => assert!(false)
         };
