@@ -1,11 +1,10 @@
-use std::collections::HashMap;
-
 use quote::quote;
 use proc_macro2::TokenStream;
 
-use syn::{parse_macro_input, DeriveInput, Error, Type, spanned::Spanned, TypePath, PathArguments};
+use syn::{parse_macro_input, DeriveInput, Error, Type, TypePath, PathArguments};
 
 #[proc_macro_derive(AvroSchema)]
+/// Templated from Serde
 pub fn proc_macro_derive_avro_schema(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let mut input = parse_macro_input!(input as DeriveInput);
     derive_avro_schema(&mut input)
@@ -77,11 +76,10 @@ fn get_data_enum_schema_def (e: &syn::DataEnum, ident: &syn::Ident) -> Result<To
     }
 } 
 
+/// Takes in the Tokens of a type and returns the tokens of an expression with return type `Schema`
 fn type_to_schema_expr(ty: &Type) -> Result<TokenStream, Vec<Error>> {
     if let Type::Path(p) = ty {
         let type_string = p.path.segments.last().unwrap().ident.to_string();
-        // println!("{:?}",type_string);
-        // println!("{:?}",ty);
 
         let schema = match &type_string[..] {
             "bool" => quote!{Schema::Boolean},
@@ -93,7 +91,8 @@ fn type_to_schema_expr(ty: &Type) -> Result<TokenStream, Vec<Error>> {
             "char" => return Err(vec![Error::new_spanned(ty, "AvroSchema: Cannot guarentee sucessful deserialization of this type")]),
             "u32" | "u64" => return Err(vec![Error::new_spanned(ty, "Cannot guarentee sucessful serialization of this type due to overflow concerns")]), //Can't guarentee serialization type 
             _ => {
-                println!("typepath {:?}", p);
+                // Fails when the type does not implement AvroSchema directly or covered by blanket implementation 
+                // TODO check and error report with something like https://docs.rs/quote/1.0.15/quote/macro.quote_spanned.html#example
                 return type_path_get_schema(p)
             },
         };
@@ -107,8 +106,16 @@ fn type_to_schema_expr(ty: &Type) -> Result<TokenStream, Vec<Error>> {
     }
 }
 
+/// Generates the schema def expression for fully qualified type paths using the associated function
+/// - `A -> A::get_schema()`
+/// - `A<T> -> A::<T>::get_schema()`
+/// - `crate::mod::mod::A<T> -> crate::mod::mod::A::<T>:get_schema()`
+/// TODO review if need to implement as 
+/// - `A -> <A as AvroSchema>::get_schema()`
+/// - `A<T> -> <A<T> as AvroSchema>::get_schema()`
+/// 
 fn type_path_get_schema(p: &TypePath) -> Result<TokenStream, Vec<Error>> {
-    let last = p.path.segments.last().unwrap(); // inside a stuct there type must always be defined / have a last path segment
+    let last = p.path.segments.last().unwrap(); // inside a stuct the type must always be defined / have a last path segment
     let mut it = p.path.segments.iter().peekable();
     let mut all_but_last =  vec![];
     while let Some(path_seg) = it.next() {
@@ -126,6 +133,7 @@ fn type_path_get_schema(p: &TypePath) -> Result<TokenStream, Vec<Error>> {
     }
 }
 
+/// Stolen from serde
 fn to_compile_errors(errors: Vec<syn::Error>) -> proc_macro2::TokenStream {
     let compile_errors = errors.iter().map(syn::Error::to_compile_error);
     quote!(#(#compile_errors)*)

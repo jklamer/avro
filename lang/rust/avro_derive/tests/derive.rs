@@ -1,25 +1,20 @@
 
 use avro_derive::*;
 use serde::ser::Serialize;
-use serde::de::Deserialize;
+use serde::de::DeserializeOwned;
 use avro_rs::schema::AvroSchema;
-use avro_rs::Schema;
-use avro_rs::Writer;
+use avro_rs::{Reader, from_value, Writer, Schema};
+use std::collections::HashMap;
+
 
 #[macro_use]
 extern crate serde;
 
-#[macro_use]
-extern crate avro_derive;
-
 #[cfg(test)]
 mod test_derive {
-    use avro_rs::{Reader, from_value};
-    use serde::{Deserializer, de::DeserializeOwned};
-
     use super::*;
 
-    /// Takes in a struct that implements the right combination of traits and runs the Struct through a Serde Cycle and asserts the result is the same 
+    /// Takes in a type that implements the right combination of traits and runs it through a Serde Cycle and asserts the result is the same 
     fn freeze_dry<T>(obj: T) where T : std::fmt::Debug + Serialize + DeserializeOwned + AvroSchema + Clone + PartialEq  {
         let schema = T::get_schema();
         let mut writer = Writer::new(&schema, Vec::new());
@@ -42,7 +37,6 @@ mod test_derive {
     
     #[test]
     fn test_smoke_test() {
-        // Uses derived schema for the data class 
         let test = Test1 {
             a: 27,
             b: "foo".to_owned(),
@@ -131,12 +125,12 @@ mod test_derive {
         freeze_dry(optional_field);
     }
 
-    ///
-    /// Generic Container
+    /// Generic Containers
     #[derive(Debug, Serialize, Deserialize, AvroSchema, Clone, PartialEq)]
     struct Test5<T : AvroSchema> {
         a: String,
-        b: Vec<T>
+        b: Vec<T>,
+        c: HashMap<String, T>
     }
 
 
@@ -144,7 +138,8 @@ mod test_derive {
     fn test_generic_container_1() {
         let test_generic = Test5::<i32> {
             a : "testing".to_owned(),
-            b : vec![0,1,2,3]
+            b : vec![0,1,2,3],
+            c : vec![("key".to_owned(),3)].into_iter().collect()
         };
         freeze_dry(test_generic);
     }
@@ -164,7 +159,19 @@ mod test_derive {
                 h: 32.3333,
                 i: 64.4444,
                 j: "testing string".to_owned(),
-            }]
+            }],
+            c : vec![("key".to_owned(), Test2 {
+                a: true,
+                b: 8,
+                c: 16,
+                d: 32,
+                e: 8,
+                f: 16,
+                g: 64,
+                h: 32.3333,
+                i: 64.4444,
+                j: "testing string".to_owned(),
+            })].into_iter().collect()
         };
         freeze_dry(test_generic);
     }
