@@ -141,7 +141,7 @@ mod test_derive {
 
 
     #[test]
-    fn test_generic_container() {
+    fn test_generic_container_1() {
         let test_generic = Test5::<i32> {
             a : "testing".to_owned(),
             b : vec![0,1,2,3]
@@ -149,31 +149,46 @@ mod test_derive {
         freeze_dry(test_generic);
     }
 
-    // ///
-    // /// Special Type coericions  
-    // #[derive(Debug, Serialize, Deserialize, AvroSchema, Clone, PartialEq)]
-    // struct Test6 {
-    //     bytes: Vec<u8>
-    // }
+    #[test]
+    fn test_generic_container_2() {
+        let test_generic = Test5::<Test2> {
+            a : "testing".to_owned(),
+            b : vec![Test2 {
+                a: true,
+                b: 8,
+                c: 16,
+                d: 32,
+                e: 8,
+                f: 16,
+                g: 64,
+                h: 32.3333,
+                i: 64.4444,
+                j: "testing string".to_owned(),
+            }]
+        };
+        freeze_dry(test_generic);
+    }
 
-    // #[test]
-    // fn test_type_coercion() {
-    //     let type_coercion = Test6 {
-    //         bytes: vec![255,0,5],
-    //     };
-    //     // let bytes_schema = match Test6::get_schema() {
-    //     //     Schema::Record { 
-    //     //         name,
-    //     //         doc,
-    //     //         fields,
-    //     //         lookup
-    //     //      } => {
-    //     //         fields[*lookup.get("bytes").unwrap()].clone()
-    //     //     }
-    //     //     _ => unreachable!()
-    //     // };
-    //     // assert_eq!(Schema::Bytes, bytes_schema.schema);
-    //     println!("{:?}", Test6::get_schema());
-    //     freeze_dry(type_coercion);
-    // }
+    #[derive(Debug, Serialize, Deserialize, AvroSchema, Clone, PartialEq)]
+    enum Basic {
+        A,
+        B,
+        C,
+        D
+    }
+
+    #[derive(Debug, Serialize, Deserialize, AvroSchema, Clone, PartialEq)]
+    struct Test6 {
+        a: Basic,
+        b: String
+    }
+    
+    #[test]
+    fn test_enum() {
+        let enum_included =  Test6 {
+            a: Basic::B,
+            b: "hey".to_owned(),
+        };
+        freeze_dry(enum_included);
+    }
 }

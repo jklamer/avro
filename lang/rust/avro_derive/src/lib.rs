@@ -14,50 +14,12 @@ pub fn proc_macro_derive_avro_schema(input: proc_macro::TokenStream) -> proc_mac
 }
 
 fn derive_avro_schema(input: &mut DeriveInput) -> Result<TokenStream, Vec<syn::Error>> {
-    let name = input.ident.to_string();
-    let mut record_field_exprs = vec![];
-    match &input.data {
-        syn::Data::Struct(s) => {
-            match s.fields {
-                syn::Fields::Named(ref a) => {
-                    for (position, field) in a.named.iter().enumerate() {
-                        let name = field.ident.as_ref().unwrap().to_string(); // we know everything has a name
-                        let schema_expr = type_to_schema_expr(&field.ty)?;
-                        let position = position;
-                        record_field_exprs.push(quote!{
-                            avro_rs::schema::RecordField {
-                                    name: #name.to_string(),
-                                    doc: Option::None,
-                                    default: Option::None,
-                                    schema: #schema_expr,
-                                    order: avro_rs::schema::RecordFieldOrder::Ignore,
-                                    position: #position,
-                                }
-                        });
-                    }
-                },
-                syn::Fields::Unnamed(_) => return Err(vec![ Error::new(input.ident.span(), "AvroSchema derive does not work for tuple structs")]),
-                syn::Fields::Unit => return Err(vec![ Error::new(input.ident.span(), "AvroSchema derive does not work for unit structs")]),  
-            }
-        },
+    let schema_def = match &input.data {
+        syn::Data::Struct(s) => get_data_struct_schema_def(s, &input.ident)?,
+        syn::Data::Enum(e) => get_data_enum_schema_def(e, &input.ident)?,
         _ => return Err(vec![ Error::new(input.ident.span(), "AvroSchema derive only works for structs") ]),
     };
 
-    let schema_def = quote!{
-        let schema_fields = vec![#(#record_field_exprs),*];
-        avro_rs::schema::record_schema_for_fields(avro_rs::schema::Name::new(#name),None, schema_fields)
-    };
-
-
-    // let lookup: HashMap<String, usize> =  schema_fields.iter().map(|field | {(field.name.to_owned(),  field.position)}).collect();
-    // let record_schema = Schema::Record {
-    //     name: Name::new(&name[..]),
-    //     doc: None,
-    //     fields: schema_fields,
-    //     lookup: lookup,
-    // };
-    // println!("{}", record_schema.canonical_form());
-    // let can_form = record_schema.canonical_form();
     let ty = &input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl(); 
     let dummy = quote! {
@@ -68,6 +30,63 @@ fn derive_avro_schema(input: &mut DeriveInput) -> Result<TokenStream, Vec<syn::E
         }
     };
     Ok(dummy)
+}
+
+fn get_data_struct_schema_def (s: &syn::DataStruct, ident: &syn::Ident) -> Result<TokenStream, Vec<Error>> {
+    let mut record_field_exprs = vec![];
+    match s.fields {
+        syn::Fields::Named(ref a) => {
+            for (position, field) in a.named.iter().enumerate() {
+                let name = field.ident.as_ref().unwrap().to_string(); // we know everything has a name
+                let schema_expr = type_to_schema_expr(&field.ty)?;
+                let position = position;
+                record_field_exprs.push(quote!{
+                    avro_rs::schema::RecordField {
+                            name: #name.to_string(),
+                            doc: Option::None,
+                            default: Option::None,
+                            schema: #schema_expr,
+                            order: avro_rs::schema::RecordFieldOrder::Ignore,
+                            position: #position,
+                        }
+                });
+            }
+        },
+        syn::Fields::Unnamed(_) => return Err(vec![ Error::new(ident.span(), "AvroSchema derive does not work for tuple structs")]),
+        syn::Fields::Unit => return Err(vec![ Error::new(ident.span(), "AvroSchema derive does not work for unit structs")]),  
+    }
+    let name = ident.to_string();
+    Ok(quote!{
+        let schema_fields = vec![#(#record_field_exprs),*];
+        avro_rs::schema::record_schema_for_fields(avro_rs::schema::Name::new(#name), None, schema_fields)
+    })
+}
+
+fn get_data_enum_schema_def (e: &syn::DataEnum, ident: &syn::Ident) -> Result<TokenStream, Vec<Error>> {
+    if only_unit_variants(e) {
+        let symbols : Vec<String> = e.variants.iter().map(|varient | varient.ident.to_string()).collect();
+        let name = ident.to_string();
+        Ok(quote!{
+            avro_rs::schema::Schema::Enum {
+                name: avro_rs::schema::Name::new(#name),
+                doc: None,
+                symbols: vec![#(#symbols.to_owned()),*]
+            }
+        })
+    } else {
+        Err(vec![ Error::new(ident.span(), "AvroSchema derive does not work for enums with non unit structs")])
+    }
+} 
+// ensure 
+fn only_unit_variants(e: &syn::DataEnum) -> bool {
+    for v in &e.variants {
+        if let syn::Fields::Unit =  v.fields {
+            //no-op
+        } else {
+            return false
+        }
+    }
+    true
 }
 
 fn type_to_schema_expr(ty: &Type) -> Result<TokenStream, Vec<Error>> {
@@ -183,6 +202,26 @@ mod tests {
             }
         };
         match syn::parse2::<DeriveInput>(stuct_with_optional){
+            Ok(mut input) => {
+                println!("{}", derive_avro_schema(&mut input).unwrap());
+                assert!(derive_avro_schema(&mut input).is_ok())
+            },
+            Err(_) => assert!(false)
+        };
+    }
+
+    #[test]
+    fn test_basic_enum() {
+
+       let basic_enum = quote! {
+            enum Basic {
+                A,
+                B,
+                C,
+                D
+            }
+        };
+        match syn::parse2::<DeriveInput>(basic_enum){
             Ok(mut input) => {
                 println!("{}", derive_avro_schema(&mut input).unwrap());
                 assert!(derive_avro_schema(&mut input).is_ok())

@@ -1,0 +1,7 @@
+- Char supported in serialization only
+- How to handle timestamps
+- Way to keep consistant between encoding pieces and schema pieces
+- Ways to put in schema ref's into the derived schema. Times it might make sense to do so
+- Optional item order
+- enums?
+- what to do about bytes?
