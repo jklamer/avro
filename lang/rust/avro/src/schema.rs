@@ -1250,9 +1250,21 @@ fn field_ordering_position(field: &str) -> Option<usize> {
         .map(|pos| pos + 1)
 }
 
-pub fn record_schema_for_fields(name: Name, doc: Documentation, fields: Vec<RecordField>) -> Schema {
-    let lookup: HashMap<String, usize> =  fields.iter().map(|field | {(field.name.to_owned(),  field.position)}).collect();
-    Schema::Record{name, doc, fields, lookup}
+pub fn record_schema_for_fields(
+    name: Name,
+    doc: Documentation,
+    fields: Vec<RecordField>,
+) -> Schema {
+    let lookup: HashMap<String, usize> = fields
+        .iter()
+        .map(|field| (field.name.to_owned(), field.position))
+        .collect();
+    Schema::Record {
+        name,
+        doc,
+        fields,
+        lookup,
+    }
 }
 
 pub trait AvroSchema {
@@ -1279,37 +1291,49 @@ impl_schema!(f64, Schema::Double);
 impl_schema!(char, Schema::String);
 impl_schema!(String, Schema::String);
 impl_schema!(uuid::Uuid, Schema::Uuid);
-impl_schema!(u32, Schema::Long); 
-impl_schema!(u64, Schema::Long); 
+impl_schema!(u32, Schema::Long);
+impl_schema!(u64, Schema::Long);
 impl_schema!(core::time::Duration, Schema::Duration);
 
-
-impl <T> AvroSchema for Vec<T> where T : AvroSchema {
+impl<T> AvroSchema for Vec<T>
+where
+    T: AvroSchema,
+{
     fn get_schema() -> Schema {
         Schema::Array(Box::new(T::get_schema()))
     }
 }
 
-impl <T> AvroSchema for Option<T> where T : AvroSchema {
+impl<T> AvroSchema for Option<T>
+where
+    T: AvroSchema,
+{
     fn get_schema() -> Schema {
         let inner_schema = T::get_schema();
         Schema::Union(UnionSchema {
             schemas: vec![Schema::Null, inner_schema.clone()],
-            variant_index: vec![Schema::Null, inner_schema.clone()].iter()
-                            .enumerate()
-                            .map(|(idx, s)|  (SchemaKind::from(s), idx))
-                            .collect(),
+            variant_index: vec![Schema::Null, inner_schema.clone()]
+                .iter()
+                .enumerate()
+                .map(|(idx, s)| (SchemaKind::from(s), idx))
+                .collect(),
         })
     }
 }
 
-impl <T> AvroSchema for Map<String, T> where T : AvroSchema {
+impl<T> AvroSchema for Map<String, T>
+where
+    T: AvroSchema,
+{
     fn get_schema() -> Schema {
         Schema::Map(Box::new(T::get_schema()))
     }
 }
 
-impl <T> AvroSchema for HashMap<String, T> where T : AvroSchema {
+impl<T> AvroSchema for HashMap<String, T>
+where
+    T: AvroSchema,
+{
     fn get_schema() -> Schema {
         Schema::Map(Box::new(T::get_schema()))
     }

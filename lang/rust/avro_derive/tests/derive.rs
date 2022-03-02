@@ -1,11 +1,9 @@
-
 use avro_derive::*;
-use serde::ser::Serialize;
-use serde::de::DeserializeOwned;
 use avro_rs::schema::AvroSchema;
-use avro_rs::{Reader, from_value, Writer, Schema};
+use avro_rs::{from_value, Reader, Schema, Writer};
+use serde::de::DeserializeOwned;
+use serde::ser::Serialize;
 use std::collections::HashMap;
-
 
 #[macro_use]
 extern crate serde;
@@ -14,8 +12,11 @@ extern crate serde;
 mod test_derive {
     use super::*;
 
-    /// Takes in a type that implements the right combination of traits and runs it through a Serde Cycle and asserts the result is the same 
-    fn freeze_dry<T>(obj: T) where T : std::fmt::Debug + Serialize + DeserializeOwned + AvroSchema + Clone + PartialEq  {
+    /// Takes in a type that implements the right combination of traits and runs it through a Serde Cycle and asserts the result is the same
+    fn freeze_dry<T>(obj: T)
+    where
+        T: std::fmt::Debug + Serialize + DeserializeOwned + AvroSchema + Clone + PartialEq,
+    {
         let schema = T::get_schema();
         let mut writer = Writer::new(&schema, Vec::new());
         if let Err(e) = writer.append_ser(obj.clone()) {
@@ -28,13 +29,13 @@ mod test_derive {
             assert_eq!(obj, from_value::<T>(&value).unwrap());
         }
     }
-    
+
     #[derive(Debug, Serialize, Deserialize, AvroSchema, Clone, PartialEq)]
     struct Test1 {
         a: i32,
-        b: String
+        b: String,
     }
-    
+
     #[test]
     fn test_smoke_test() {
         let test = Test1 {
@@ -56,7 +57,7 @@ mod test_derive {
         g: i64,
         h: f32,
         i: f64,
-        j: String
+        j: String,
     }
 
     #[test]
@@ -78,8 +79,8 @@ mod test_derive {
 
     #[derive(Debug, Serialize, Deserialize, AvroSchema, Clone, PartialEq)]
     struct Test3 {
-        a : i32,
-        b : Test2
+        a: i32,
+        b: Test2,
     }
 
     #[test]
@@ -98,48 +99,42 @@ mod test_derive {
         };
         let inner_struct = Test3 {
             a: -1600,
-            b: all_basic
+            b: all_basic,
         };
         freeze_dry(inner_struct);
     }
 
-
     #[derive(Debug, Serialize, Deserialize, AvroSchema, Clone, PartialEq)]
     struct Test4 {
-        a : Option<i32>
+        a: Option<i32>,
     }
 
     #[test]
     fn test_optional_field_some() {
-        let optional_field = Test4{
-            a : Some(4)
-        };
+        let optional_field = Test4 { a: Some(4) };
         freeze_dry(optional_field);
     }
 
     #[test]
     fn test_optional_field_none() {
-        let optional_field = Test4{
-            a : None
-        };
+        let optional_field = Test4 { a: None };
         freeze_dry(optional_field);
     }
 
     /// Generic Containers
     #[derive(Debug, Serialize, Deserialize, AvroSchema, Clone, PartialEq)]
-    struct Test5<T : AvroSchema> {
+    struct Test5<T: AvroSchema> {
         a: String,
         b: Vec<T>,
-        c: HashMap<String, T>
+        c: HashMap<String, T>,
     }
-
 
     #[test]
     fn test_generic_container_1() {
         let test_generic = Test5::<i32> {
-            a : "testing".to_owned(),
-            b : vec![0,1,2,3],
-            c : vec![("key".to_owned(),3)].into_iter().collect()
+            a: "testing".to_owned(),
+            b: vec![0, 1, 2, 3],
+            c: vec![("key".to_owned(), 3)].into_iter().collect(),
         };
         freeze_dry(test_generic);
     }
@@ -147,8 +142,8 @@ mod test_derive {
     #[test]
     fn test_generic_container_2() {
         let test_generic = Test5::<Test2> {
-            a : "testing".to_owned(),
-            b : vec![Test2 {
+            a: "testing".to_owned(),
+            b: vec![Test2 {
                 a: true,
                 b: 8,
                 c: 16,
@@ -160,18 +155,23 @@ mod test_derive {
                 i: 64.4444,
                 j: "testing string".to_owned(),
             }],
-            c : vec![("key".to_owned(), Test2 {
-                a: true,
-                b: 8,
-                c: 16,
-                d: 32,
-                e: 8,
-                f: 16,
-                g: 64,
-                h: 32.3333,
-                i: 64.4444,
-                j: "testing string".to_owned(),
-            })].into_iter().collect()
+            c: vec![(
+                "key".to_owned(),
+                Test2 {
+                    a: true,
+                    b: 8,
+                    c: 16,
+                    d: 32,
+                    e: 8,
+                    f: 16,
+                    g: 64,
+                    h: 32.3333,
+                    i: 64.4444,
+                    j: "testing string".to_owned(),
+                },
+            )]
+            .into_iter()
+            .collect(),
         };
         freeze_dry(test_generic);
     }
@@ -181,18 +181,18 @@ mod test_derive {
         A,
         B,
         C,
-        D
+        D,
     }
 
     #[derive(Debug, Serialize, Deserialize, AvroSchema, Clone, PartialEq)]
     struct Test6 {
         a: Basic,
-        b: String
+        b: String,
     }
-    
+
     #[test]
     fn test_enum() {
-        let enum_included =  Test6 {
+        let enum_included = Test6 {
             a: Basic::B,
             b: "hey".to_owned(),
         };
