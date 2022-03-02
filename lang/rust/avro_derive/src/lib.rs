@@ -22,14 +22,13 @@ fn derive_avro_schema(input: &mut DeriveInput) -> Result<TokenStream, Vec<syn::E
 
     let ty = &input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl(); 
-    let dummy = quote! {
+    Ok(quote! {
         impl #impl_generics AvroSchema for #ty #ty_generics #where_clause {
             fn get_schema() -> Schema {
                 #schema_def
             }
         }
-    };
-    Ok(dummy)
+    })
 }
 
 fn get_data_struct_schema_def (s: &syn::DataStruct, ident: &syn::Ident) -> Result<TokenStream, Vec<Error>> {
@@ -63,7 +62,7 @@ fn get_data_struct_schema_def (s: &syn::DataStruct, ident: &syn::Ident) -> Resul
 }
 
 fn get_data_enum_schema_def (e: &syn::DataEnum, ident: &syn::Ident) -> Result<TokenStream, Vec<Error>> {
-    if only_unit_variants(e) {
+    if e.variants.iter().all(|v| syn::Fields::Unit == v.fields) {
         let symbols : Vec<String> = e.variants.iter().map(|varient | varient.ident.to_string()).collect();
         let name = ident.to_string();
         Ok(quote!{
@@ -77,17 +76,6 @@ fn get_data_enum_schema_def (e: &syn::DataEnum, ident: &syn::Ident) -> Result<To
         Err(vec![ Error::new(ident.span(), "AvroSchema derive does not work for enums with non unit structs")])
     }
 } 
-// ensure 
-fn only_unit_variants(e: &syn::DataEnum) -> bool {
-    for v in &e.variants {
-        if let syn::Fields::Unit =  v.fields {
-            //no-op
-        } else {
-            return false
-        }
-    }
-    true
-}
 
 fn type_to_schema_expr(ty: &Type) -> Result<TokenStream, Vec<Error>> {
     if let Type::Path(p) = ty {
