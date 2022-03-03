@@ -23,11 +23,9 @@ let raw_schema = r#"
             {"name": "a", "type": "long", "default": 42},
             {"name": "b", "type": "string"}
         ]
-    }
-"#;
-
-// if the schema is not valid, this function will return an error
+    }// if the schema is not valid, this function will return an error
 let schema = Schema::parse_str(raw_schema).unwrap();
+"#;
 
 use apache_avro::Writer;
 
@@ -36,6 +34,9 @@ struct Test {
     a: i64,
     b: String,
 }
+
+// if the schema is not valid, this function will return an error
+let schema = Schema::parse_str(raw_schema).unwrap();
 
 let mut writer = Writer::new(&schema, Vec::new());
 let test = Test {
@@ -58,26 +59,17 @@ struct Test {
 // derived schema, always valid or code fails to compile with a descriptive message
 let schema = Test::get_schema();
 
-// a writer needs a schema and something to write to
 let mut writer = Writer::new(&schema, Vec::new());
-
-// the structure models our Record schema
 let test = Test {
     a: 27,
     b: "foo".to_owned(),
 };
-
-// schema validation happens here
 writer.append_ser(test).unwrap();
-
-// this is how to get back the resulting avro bytecode
-// this performs a flush operation to make sure data is written, so it can fail
-// you can also call `writer.flush()` yourself without consuming the writer
 let encoded = writer.into_inner();
 ```
 
 
-##### crate inport 
+##### crate import
 To use this functionality it comes as an optional feature (modeled off serde)
 
 cargo.toml
