@@ -23,9 +23,7 @@ let raw_schema = r#"
             {"name": "a", "type": "long", "default": 42},
             {"name": "b", "type": "string"}
         ]
-    }// if the schema is not valid, this function will return an error
-let schema = Schema::parse_str(raw_schema).unwrap();
-"#;
+    }
 
 use apache_avro::Writer;
 
