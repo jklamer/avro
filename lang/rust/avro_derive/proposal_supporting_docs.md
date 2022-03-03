@@ -75,3 +75,12 @@ writer.append_ser(test).unwrap();
 // you can also call `writer.flush()` yourself without consuming the writer
 let encoded = writer.into_inner();
 ```
+
+
+##### crate inport 
+To use this functionality it comes as an optional feature (modeled off serde)
+
+cargo.toml
+```
+apache-avro = { version = "X.Y.Z", features = ["derive"] }
+```
