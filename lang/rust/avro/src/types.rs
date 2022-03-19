@@ -868,8 +868,9 @@ mod tests {
         decimal::Decimal,
         duration::{Days, Duration, Millis, Months},
         schema::{Name, RecordField, RecordFieldOrder, Schema, UnionSchema},
-        types::Value,
+        types::Value, encode,
     };
+    use serde::Serialize;
     use uuid::Uuid;
 
     #[test]
@@ -1636,5 +1637,119 @@ mod tests {
         outer2
             .resolve(&schema)
             .expect("Record definition defined in union must be resolvabled in other field");
+    }
+
+    #[test]
+    fn test_validation_with_refs() {
+        let schema = Schema::parse_str(
+            r#"
+        {
+            "type":"record",
+            "name":"TestStruct",
+            "fields": [
+                {
+                    "name":"a",
+                    "type":{
+                        "type":"record",
+                        "name": "Inner",
+                        "fields": [ {
+                            "name":"z",
+                            "type":"int"
+                        }]
+                    }
+                },
+                {
+                    "name":"b",
+                    "type":"Inner"
+                }
+            ]
+        }"#,
+        )
+        .unwrap();
+
+        let inner_value_right = Value::Record(vec![("z".into(), Value::Int(3))]);
+        let inner_value_wrong1 = Value::Record(vec![("z".into(), Value::Null)]);
+        let inner_value_wrong2 = Value::Record(vec![("a".into(), Value::String("testing".into()))]);
+        let outer1 = Value::Record(vec![
+            ("a".into(), inner_value_right.clone()),
+            ("b".into(), inner_value_wrong1),
+        ]);
+
+        let outer2 = Value::Record(vec![
+            ("a".into(), inner_value_right),
+            ("b".into(), inner_value_wrong2),
+        ]);
+
+        assert!(!outer1.validate(&schema), "field b record is invalid against the schema"); // this should pass, but doesn't
+        assert!(!outer2.validate(&schema), "field b record is invalid against the schema"); // this should pass, but doesn't
+    }
+
+    #[derive(Serialize, Clone)]
+    struct TestInner {
+        z: i32
+    }
+
+    #[derive(Serialize)]
+    struct TestRefSchemaStruct1 {
+        a: TestInner,
+        b: String // could be literally anything
+    }
+
+    #[derive(Serialize)]
+    struct TestRefSchemaStruct2 {
+        a: TestInner,
+        b: i32 // could be literally anything
+    }
+
+    #[derive(Serialize)]
+    struct TestRefSchemaStruct3 {
+        a: TestInner,
+        b: Option<TestInner> // could be literally anything
+    }
+
+    #[test]
+    fn test_validation_with_refs_real_struct() {
+        let schema = Schema::parse_str(
+            r#"
+        {
+            "type":"record",
+            "name":"TestStruct",
+            "fields": [
+                {
+                    "name":"a",
+                    "type":{
+                        "type":"record",
+                        "name": "Inner",
+                        "fields": [ {
+                            "name":"z",
+                            "type":"int"
+                        }]
+                    }
+                },
+                {
+                    "name":"b",
+                    "type":"Inner"
+                }
+            ]
+        }"#,
+        )
+        .unwrap();
+
+        let test_inner  = TestInner{z:3};
+        let test_outer1 = TestRefSchemaStruct1{a:test_inner.clone(), b:"testing".into()};
+        let test_outer2 = TestRefSchemaStruct2{a:test_inner.clone(), b:24};
+        let test_outer3 = TestRefSchemaStruct3{a:test_inner.clone(), b:None};
+        
+        use crate::ser::Serializer;
+        let mut ser =  Serializer::default();
+        let test_outer1: Value = test_outer1.serialize(&mut ser ).unwrap();
+        let mut ser =  Serializer::default(); 
+        let test_outer2: Value = test_outer2.serialize(&mut ser ).unwrap();
+        let mut ser =  Serializer::default(); 
+        let test_outer3: Value = test_outer3.serialize(&mut ser ).unwrap(); 
+
+        assert!(!test_outer1.validate(&schema), "field b record is invalid against the schema"); // this should pass, but doesn't
+        assert!(!test_outer2.validate(&schema), "field b record is invalid against the schema"); // this should pass, but doesn't
+        assert!(!test_outer3.validate(&schema), "field b record is invalid against the schema"); // this should pass, but doesn't
     }
 }
